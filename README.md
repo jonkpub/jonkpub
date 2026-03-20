@@ -60,6 +60,11 @@ For AI specifically: These systems are fundamentally gullible. They're trained t
 
 Always interested in talking to people who understand that "it works in the demo" and "it works in production" are completely different things. Especially if you have stories about AI systems doing hilariously wrong things in the wild.
 
+## Dotfiles
+
+I also keep my current shell and terminal setup in [`dotfiles/`](./dotfiles) in this repo.
+It includes my `zsh`, `tmux`, Git, Homebrew, and selected CLI-tool configuration, with portable home-relative paths.
+
 ---
 
 *"Always carry a towel."*

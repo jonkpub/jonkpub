@@ -1,0 +1,19 @@
+# Generated outputs
+CLI_TOOL_STACK.md
+
+# macOS noise
+.DS_Store
+
+# Tool/runtime state
+.zcompdump
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Editor noise
+*.swp
+*.swo
+
+# Secrets and machine-local auth should stay out of the repo.
+# Keep these outside dotfiles or in ignored override files if added later.

@@ -1,0 +1,18 @@
+{
+  "worker_model": "gpt-5-mini-2025-08-07",
+  "planner_model": "gpt-5.4",
+  "reviewer_model": "gpt-5.4",
+  "judge_model": "gpt-5.4",
+  "agent_engineer_model": "gpt-5.4",
+  "default_worker_mode": "edit",
+  "default_candidate_count": 1,
+  "launcher_order": ["current-shell", "tmux", "ghostty", "cmux", "custom"],
+  "launcher_preference": "",
+  "cmux_launch_template": "",
+  "project_launch_template": "",
+  "tui_shell_launcher": "",
+  "tui_codex_launcher": "",
+  "tui_opencode_launcher": "",
+  "tui_preview_lines": 60,
+  "tui_diff_lines": 220
+}

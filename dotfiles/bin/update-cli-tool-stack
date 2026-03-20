@@ -110,7 +110,7 @@ These are loaded directly into `zsh`:
 - `starship` via `eval "$(starship init zsh)"`
 - `nvm` via `. "$NVM_DIR/nvm.sh"`
 - `bun` completions via `. "$HOME/.bun/_bun"`
-- `fzf-tab` via `source "$HOME/dotfiles/vendor/fzf-tab/fzf-tab.plugin.zsh"`
+- `fzf-tab` via `source "/opt/homebrew/opt/fzf-tab/share/fzf-tab/fzf-tab.zsh"`
 
 ## Installed CLI Tools
 

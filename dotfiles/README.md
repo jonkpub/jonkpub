@@ -16,7 +16,6 @@ Personal environment setup for this machine.
 - `config/starship.toml`
 - `config/gh/config.yml`
 - `config/codex-orchestrator/config.json`
-- `vendor/fzf-tab/`
 - `Brewfile`
 - `bin/update-cli-tool-stack`
 
@@ -45,5 +44,6 @@ Refresh the CLI inventory manually:
 - The repo-backed files are the canonical source of truth.
 - The home-directory dotfiles are thin stubs that source or include these files.
 - Selected files in `~/.config` are symlinked back to this repo by `install.sh`.
+- `fzf-tab` is installed through Homebrew rather than vendored in this repo.
 - Secret-bearing or machine-local files are intentionally excluded, for example `~/.config/gh/hosts.yml`.
 - `CLI_TOOL_STACK.md` is a generated report, not the source of truth.

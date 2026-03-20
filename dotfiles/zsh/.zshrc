@@ -108,7 +108,7 @@ mux() {
 eval "$(starship init zsh)"
 
 # Replace standard tab completion with fzf-tab dropdowns
-[ -r "$HOME/dotfiles/vendor/fzf-tab/fzf-tab.plugin.zsh" ] && source "$HOME/dotfiles/vendor/fzf-tab/fzf-tab.plugin.zsh"
+[ -r "/opt/homebrew/opt/fzf-tab/share/fzf-tab/fzf-tab.zsh" ] && source "/opt/homebrew/opt/fzf-tab/share/fzf-tab/fzf-tab.zsh"
 
 # Enable live previews for folders (using eza) and files (using cat)
 zstyle ':fzf-tab:complete:cd:*' fzf-preview 'eza -1 --color=always $realpath'

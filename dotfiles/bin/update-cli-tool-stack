@@ -194,6 +194,8 @@ EOF
 - `~/dotfiles` is the source of truth for configuration.
 - `~/CLI_TOOL_STACK.md` is the convenient home-level copy.
 - `~/dotfiles/docs/CLI_TOOL_STACK.md` is the repo-backed copy you can hand to agents or keep under version control.
+- Run `tool-help <tool>` to generate or display a cached guide under `~/dotfiles/docs/tools/<tool>/`.
+- `tool-help` now grounds answers from `tldr`/`--help`/`man` before optional AI enrichment.
 
 EOF
 
@@ -218,6 +220,9 @@ EOF
   emit_tool_row broot "An interactive tree browser for exploring directories and files in the terminal." "It gives you an alternate file-exploration workflow when you want structure-first navigation."
   emit_tool_row btm "A terminal dashboard for CPU, memory, disk, and process monitoring." "It is your quick system-health view."
   emit_tool_row sk "Another fuzzy finder, similar to fzf, for quickly selecting items from a list." "It gives you a secondary fuzzy-selection tool to compare or use selectively."
+  emit_tool_row tldr "Fast community cheat sheets for command-line tools." "It is the preferred first grounding source for tool-help when available."
+  emit_tool_row tealdeer "Fast Rust implementation of tldr cheat sheets." "It gives tool-help an offline-first, low-latency source of practical command examples."
+  emit_tool_row opencode "CLI agent runtime used as the default AI enrichment backend for tool-help." "It powers the richer generated explanations when local grounding is not enough."
   emit_tool_row ghostty "Terminal emulator with command-line hooks and theme/listing support." "It is part of your terminal environment and theme tooling."
   emit_tool_row zed "Editor launcher so you can open files and projects from the terminal." "It connects your shell workflow to your editor quickly."
 
@@ -255,6 +260,7 @@ EOF
   emit_local_script_row ghostty-theme-preview "Previews Ghostty themes before applying them."
   emit_local_script_row ghostty-theme-revert "Reverts a Ghostty theme change."
   emit_local_script_row ghostty-theme-save "Saves a Ghostty theme choice."
+  emit_local_script_row tool-help "Generates grounded help for a CLI tool, then optionally enriches it with AI."
   emit_local_script_row sync-jonkpub-dotfiles "Mirrors ~/dotfiles into the jonkpub/jonkpub repo subtree."
   emit_local_script_row update-dotfile "Refreshes docs, syncs dotfiles into the profile repo, then commits and pushes."
   emit_local_script_row update-cli-tool-stack "Regenerates this CLI inventory."

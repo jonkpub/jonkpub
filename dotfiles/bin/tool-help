@@ -1,0 +1,314 @@
+#!/bin/zsh
+
+set -euo pipefail
+
+SCRIPT_DIR="${0:A:h}"
+DOTFILES_DIR="${DOTFILES_SOURCE_DIR:-${SCRIPT_DIR:h}}"
+LIB_DIR="$DOTFILES_DIR/lib/tool-help"
+PROVIDERS_DIR="$LIB_DIR/providers"
+TOOLS_DIR="${TOOL_HELP_ROOT:-$DOTFILES_DIR/docs/tools}"
+INVENTORY_FILE="${TOOL_HELP_INVENTORY_FILE:-$DOTFILES_DIR/docs/CLI_TOOL_STACK.md}"
+CONFIG_FILE="${TOOL_HELP_CONFIG_FILE:-$DOTFILES_DIR/config/tool-help/config.toml}"
+
+source "$LIB_DIR/common.zsh"
+load_tool_help_config "$CONFIG_FILE"
+
+usage() {
+  /bin/cat <<'EOF'
+Usage:
+  tool-help [--refresh] [--provider auto|opencode|codex|template] [--model <model>] [--ground-only|--no-ai] [--context] <tool> [question...]
+  tool-help --list
+
+Examples:
+  tool-help tmux
+  tool-help --ground-only tmux
+  tool-help --provider opencode --model openai/gpt-5.4-mini yazi
+  tool-help --context gitui
+  tool-help --refresh atuin
+EOF
+}
+
+load_provider() {
+  local provider_name="$1"
+  local provider_file="$PROVIDERS_DIR/${provider_name}.zsh"
+
+  [[ -r "$provider_file" ]] || return 1
+  unset -f tool_help_provider_generate 2>/dev/null || true
+  source "$provider_file"
+}
+
+provider_available() {
+  local provider_name="$1"
+  case "$provider_name" in
+    opencode) command -v opencode >/dev/null 2>&1 ;;
+    codex) command -v codex >/dev/null 2>&1 ;;
+    template) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+pick_provider() {
+  local requested="$1"
+
+  if [[ "$requested" != "auto" ]]; then
+    printf '%s\n' "$requested"
+    return 0
+  fi
+
+  if provider_available "$TOOL_HELP_CONFIG_DEFAULT_PROVIDER"; then
+    printf '%s\n' "$TOOL_HELP_CONFIG_DEFAULT_PROVIDER"
+    return 0
+  fi
+
+  if provider_available opencode; then
+    printf 'opencode\n'
+    return 0
+  fi
+
+  if provider_available codex; then
+    printf 'codex\n'
+    return 0
+  fi
+
+  printf 'template\n'
+}
+
+list_saved_tools() {
+  [[ -d "$TOOLS_DIR" ]] || return 0
+  find "$TOOLS_DIR" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | LC_ALL=C sort
+}
+
+show_guide() {
+  local tool_name="$1"
+  local provider_name="$2"
+  local guide_file="$3"
+
+  print -P "%F{245}tool-help%f  %F{255}${tool_name}%f  %F{244}provider:${provider_name}%f"
+  print -P "%F{245}saved:%f ${guide_file/#$HOME/~}"
+  print
+  display_markdown_file "$guide_file"
+}
+
+run_provider() {
+  local provider_name="$1"
+  local out_file="$2"
+  local prompt_file="$3"
+  local log_file="$4"
+
+  if ! load_provider "$provider_name"; then
+    print -u2 "unknown provider: $provider_name"
+    return 1
+  fi
+
+  tool_help_provider_generate "$out_file" "$prompt_file" >>"$log_file" 2>&1
+}
+
+tool_name=""
+question=""
+provider="${TOOL_HELP_PROVIDER:-auto}"
+model="${TOOL_HELP_MODEL:-}"
+refresh=0
+list_only=0
+question_supplied=0
+ground_only=0
+context_requested=0
+no_ai=0
+typeset -a question_words=()
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --refresh)
+      refresh=1
+      shift
+      ;;
+    --provider)
+      [[ $# -ge 2 ]] || { print -u2 "missing provider name"; usage; exit 1; }
+      provider="$2"
+      shift 2
+      ;;
+    --model)
+      [[ $# -ge 2 ]] || { print -u2 "missing model name"; usage; exit 1; }
+      model="$2"
+      shift 2
+      ;;
+    --ground-only)
+      ground_only=1
+      no_ai=1
+      shift
+      ;;
+    --no-ai)
+      no_ai=1
+      shift
+      ;;
+    --context)
+      context_requested=1
+      shift
+      ;;
+    --list)
+      list_only=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      while [[ $# -gt 0 ]]; do
+        if [[ -z "$tool_name" ]]; then
+          tool_name="$1"
+        else
+          question_words+=("$1")
+        fi
+        shift
+      done
+      break
+      ;;
+    -*)
+      print -u2 "unknown option: $1"
+      usage
+      exit 1
+      ;;
+    *)
+      if [[ -z "$tool_name" ]]; then
+        tool_name="$1"
+      else
+        question_words+=("$1")
+      fi
+      shift
+      ;;
+  esac
+done
+
+if (( list_only )); then
+  list_saved_tools
+  exit 0
+fi
+
+if [[ -z "$tool_name" ]]; then
+  usage
+  exit 1
+fi
+
+if (( ${#question_words[@]} > 0 )); then
+  question="${(j: :)question_words}"
+  question_supplied=1
+fi
+
+if (( no_ai == 0 )) && (( TOOL_HELP_CONFIG_AI_ENABLED == 0 )); then
+  no_ai=1
+fi
+
+mkdir -p "$TOOLS_DIR"
+
+slug=$(slugify "$tool_name")
+tool_dir="$TOOLS_DIR/$slug"
+guide_file="$tool_dir/guide.md"
+request_file="$tool_dir/request.txt"
+meta_file="$tool_dir/meta.toml"
+queries_dir="$tool_dir/queries"
+source_dir="$tool_dir/sources"
+
+if [[ -s "$guide_file" && $refresh -eq 0 && -z "$question" && $context_requested -eq 0 ]]; then
+  cached_provider=$(read_meta_value "$meta_file" "provider")
+  show_guide "$tool_name" "${cached_provider:-cached}" "$guide_file"
+  exit 0
+fi
+
+mkdir -p "$tool_dir" "$queries_dir" "$source_dir"
+
+if [[ -z "$question" ]]; then
+  if (( context_requested )); then
+    question="Explain how to use ${tool_name} effectively in the current working context. Focus on the most useful workflows, likely next commands, and practical gotchas."
+  else
+    question="Explain how to use ${tool_name} effectively in this terminal setup. Focus on the most useful everyday commands, practical workflows, examples, common pitfalls, and how it fits with nearby tools in this environment."
+  fi
+fi
+
+printf '%s\n' "$question" >"$request_file"
+
+inventory_context=$(tool_inventory_context "$tool_name" "$INVENTORY_FILE")
+binary_path=$(resolve_cmd_path "$tool_name")
+if [[ -z "$binary_path" ]]; then
+  binary_path=$(tool_inventory_path "$tool_name" "$INVENTORY_FILE")
+fi
+version=$(tool_version_or_unknown "$tool_name")
+
+TOOL_HELP_TOOL="$tool_name"
+TOOL_HELP_SLUG="$slug"
+TOOL_HELP_QUERY="$question"
+TOOL_HELP_BINARY_PATH="$binary_path"
+TOOL_HELP_VERSION="$version"
+TOOL_HELP_DOTFILES_DIR="$DOTFILES_DIR"
+TOOL_HELP_SOURCE_DIR="$source_dir"
+TOOL_HELP_CONTEXT_REQUESTED="$context_requested"
+tool_help_context_collect
+
+if ! tool_help_collect_sources "$tool_name" "$source_dir" "$refresh" "$TOOL_HELP_CONFIG_PREFER_TEALDEER" "$TOOL_HELP_CONFIG_REQUIRE_TEALDEER"; then
+  print -u2 "tool-help failed to collect required tealdeer/tldr sources"
+  exit 1
+fi
+
+selected_provider=$(pick_provider "$provider")
+if [[ -z "$model" ]]; then
+  model=$(tool_help_default_model_for_provider "$selected_provider")
+fi
+
+tmp_file="$(mktemp "${TMPDIR:-/tmp}/tool-help.${slug}.XXXXXX")"
+prompt_file="$(mktemp "${TMPDIR:-/tmp}/tool-help.${slug}.prompt.XXXXXX")"
+log_file="$(mktemp "${TMPDIR:-/tmp}/tool-help.${slug}.log.XXXXXX")"
+
+TOOL_HELP_MODE="guide"
+TOOL_HELP_PROVIDER_USED="template"
+TOOL_HELP_MODEL_USED=""
+TOOL_HELP_AI_ENRICHED=0
+TOOL_HELP_GROUNDED_ONLY="$ground_only"
+
+tool_help_build_prompt "$prompt_file" "$tool_name" "$question" "$source_dir" "$inventory_context" "$context_requested"
+
+if (( no_ai )); then
+  selected_provider="template"
+fi
+
+if [[ "$selected_provider" != "template" ]]; then
+  TOOL_HELP_PROVIDER_USED="$selected_provider"
+  TOOL_HELP_MODEL_USED="$model"
+  if run_provider "$selected_provider" "$tmp_file" "$prompt_file" "$log_file" && [[ -s "$tmp_file" ]]; then
+    TOOL_HELP_AI_ENRICHED=1
+  else
+    print -u2 "provider ${selected_provider} failed, falling back to grounded template output"
+    selected_provider="template"
+    TOOL_HELP_PROVIDER_USED="template"
+    TOOL_HELP_MODEL_USED=""
+    TOOL_HELP_AI_ENRICHED=0
+    : >"$tmp_file"
+  fi
+fi
+
+if [[ "$selected_provider" == "template" ]]; then
+  run_provider template "$tmp_file" "$prompt_file" "$log_file"
+fi
+
+if [[ "$selected_provider" == "template" && "$TOOL_HELP_AI_ENRICHED" != "1" ]]; then
+  TOOL_HELP_GROUNDED_ONLY=1
+fi
+
+if (( question_supplied || context_requested )) && [[ $refresh -eq 0 && -s "$guide_file" ]]; then
+  timestamp=$(/bin/date -u +"%Y-%m-%dT%H-%M-%SZ")
+  query_file="$queries_dir/$timestamp.md"
+  query_request_file="$queries_dir/$timestamp.request.txt"
+  query_meta_file="$queries_dir/$timestamp.toml"
+  TOOL_HELP_MODE="query"
+  mv "$tmp_file" "$query_file"
+  printf '%s\n' "$question" >"$query_request_file"
+  write_meta_file "$query_meta_file"
+  show_guide "$tool_name" "$TOOL_HELP_PROVIDER_USED" "$query_file"
+  rm -f "$prompt_file" "$log_file"
+  exit 0
+fi
+
+mv "$tmp_file" "$guide_file"
+write_meta_file "$meta_file"
+
+show_guide "$tool_name" "$TOOL_HELP_PROVIDER_USED" "$guide_file"
+rm -f "$prompt_file" "$log_file"

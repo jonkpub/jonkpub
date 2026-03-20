@@ -6,7 +6,26 @@ DOTFILES_DIR="${DOTFILES_SOURCE_DIR:-$HOME/dotfiles}"
 REPO_DIR="${JONKPUB_REPO_DIR:-$HOME/Projects/jonkpub}"
 COMMIT_MSG="${1:-Update dotfiles}"
 
+if [[ ! -d "$DOTFILES_DIR/.git" ]]; then
+  print -u2 "dotfiles source is not a git repo: $DOTFILES_DIR"
+  exit 1
+fi
+
+if [[ ! -d "$REPO_DIR/.git" ]]; then
+  print -u2 "target repo is not a git repo: $REPO_DIR"
+  exit 1
+fi
+
 "$DOTFILES_DIR/bin/update-cli-tool-stack"
+
+if [[ -n "$(git -C "$DOTFILES_DIR" status --porcelain)" ]]; then
+  git -C "$DOTFILES_DIR" add -A
+
+  if ! git -C "$DOTFILES_DIR" diff --cached --quiet; then
+    git -C "$DOTFILES_DIR" commit -m "$COMMIT_MSG"
+  fi
+fi
+
 "$DOTFILES_DIR/bin/sync-jonkpub-dotfiles"
 
 if [[ -z "$(git -C "$REPO_DIR" status --porcelain -- dotfiles)" ]]; then
@@ -16,7 +35,7 @@ fi
 
 git -C "$REPO_DIR" add dotfiles
 
-if [[ -z "$(git -C "$REPO_DIR" status --porcelain --cached -- dotfiles)" ]]; then
+if git -C "$REPO_DIR" diff --cached --quiet -- dotfiles; then
   print "no staged dotfiles changes to commit"
   exit 0
 fi

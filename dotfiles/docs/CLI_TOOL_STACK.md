@@ -19,6 +19,8 @@ Do not edit it manually. Edit `~/dotfiles` instead.
 - `~/dotfiles` is the source of truth for configuration.
 - `~/CLI_TOOL_STACK.md` is the convenient home-level copy.
 - `~/dotfiles/docs/CLI_TOOL_STACK.md` is the repo-backed copy you can hand to agents or keep under version control.
+- Run `tool-help <tool>` to generate or display a cached guide under `~/dotfiles/docs/tools/<tool>/`.
+- `tool-help` now grounds answers from `tldr`/`--help`/`man` before optional AI enrichment.
 
 ## Core Tools To Learn First
 
@@ -46,7 +48,8 @@ Useful tools that complement the core shell workflow or cover narrower tasks.
 | `broot` | An interactive tree browser for exploring directories and files in the terminal. | It gives you an alternate file-exploration workflow when you want structure-first navigation. | broot 1.55.0 | `/opt/homebrew/bin/broot` | Homebrew |
 | `btm` | A terminal dashboard for CPU, memory, disk, and process monitoring. | It is your quick system-health view. | bottom 0.12.3 | `/opt/homebrew/bin/btm` | Homebrew |
 | `sk` | Another fuzzy finder, similar to fzf, for quickly selecting items from a list. | It gives you a secondary fuzzy-selection tool to compare or use selectively. | sk 4.0.0 | `/opt/homebrew/bin/sk` | Homebrew |
-| `ghostty` | Terminal emulator with command-line hooks and theme/listing support. | It is part of your terminal environment and theme tooling. | Ghostty 1.3.1 | `/Applications/Ghostty.app/Contents/MacOS/ghostty` | App install |
+| `tldr` | Fast community cheat sheets for command-line tools. | It is the preferred first grounding source for tool-help when available. | tealdeer 1.8.1 | `/opt/homebrew/bin/tldr` | Homebrew |
+| `opencode` | CLI agent runtime used as the default AI enrichment backend for tool-help. | It powers the richer generated explanations when local grounding is not enough. | 1.2.20 | `/opt/homebrew/bin/opencode` | Homebrew |
 | `zed` | Editor launcher so you can open files and projects from the terminal. | It connects your shell workflow to your editor quickly. | Zed 0.227.1 – /Applications/Zed.app | `/opt/homebrew/bin/zed` | Homebrew |
 
 ## Runtime / Platform Tools
@@ -79,6 +82,7 @@ These are your custom scripts in `~/.local/bin`. They are specific to your setup
 | `ghostty-theme-preview` | Previews Ghostty themes before applying them. | `~/.local/bin/ghostty-theme-preview` |
 | `ghostty-theme-revert` | Reverts a Ghostty theme change. | `~/.local/bin/ghostty-theme-revert` |
 | `ghostty-theme-save` | Saves a Ghostty theme choice. | `~/.local/bin/ghostty-theme-save` |
+| `tool-help` | Generates grounded help for a CLI tool, then optionally enriches it with AI. | `~/.local/bin/tool-help` |
 | `update-cli-tool-stack` | Regenerates this CLI inventory. | `~/.local/bin/update-cli-tool-stack` |
 
 ## Active Aliases
@@ -104,6 +108,7 @@ These are your custom scripts in `~/.local/bin`. They are specific to your setup
 | `ls` | `eza --icons` |
 | `run-help` | `man` |
 | `skh` | `sk` |
+| `th` | `tool-help` |
 | `tlg` | `terminal-guide` |
 | `tlh` | `terminal-hints` |
 | `tls` | `tmux ls` |

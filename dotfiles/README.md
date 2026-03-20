@@ -17,6 +17,7 @@ Personal environment setup for this machine.
 - `config/gh/config.yml`
 - `config/codex-orchestrator/config.json`
 - `Brewfile`
+- `bin/sync-jonkpub-dotfiles`
 - `bin/update-cli-tool-stack`
 
 ## Usage
@@ -37,6 +38,18 @@ Refresh the CLI inventory manually:
 
 ```sh
 ~/dotfiles/bin/update-cli-tool-stack
+```
+
+Mirror the current working copy into the `jonkpub/jonkpub` profile repo subtree:
+
+```sh
+~/dotfiles/bin/sync-jonkpub-dotfiles
+```
+
+You can override the target clone location if needed:
+
+```sh
+JONKPUB_REPO_DIR=~/some/other/jonkpub ~/dotfiles/bin/sync-jonkpub-dotfiles
 ```
 
 ## Notes

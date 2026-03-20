@@ -1,0 +1,32 @@
+#!/bin/zsh
+
+set -euo pipefail
+
+SOURCE_DIR="${DOTFILES_SOURCE_DIR:-$HOME/dotfiles}"
+REPO_DIR="${JONKPUB_REPO_DIR:-$HOME/Projects/jonkpub}"
+TARGET_DIR="$REPO_DIR/dotfiles"
+
+if [[ ! -d "$SOURCE_DIR" ]]; then
+  print -u2 "missing source dir: $SOURCE_DIR"
+  exit 1
+fi
+
+if [[ ! -d "$REPO_DIR/.git" ]]; then
+  print -u2 "target repo is not a git repo: $REPO_DIR"
+  exit 1
+fi
+
+if [[ "$SOURCE_DIR" == "$TARGET_DIR" ]]; then
+  print -u2 "source and target are the same path"
+  exit 1
+fi
+
+mkdir -p "$TARGET_DIR"
+
+/usr/bin/rsync -a --delete \
+  --exclude '.git/' \
+  --exclude '.DS_Store' \
+  "$SOURCE_DIR/" "$TARGET_DIR/"
+
+print "synced $SOURCE_DIR -> $TARGET_DIR"
+git -C "$REPO_DIR" status --short dotfiles

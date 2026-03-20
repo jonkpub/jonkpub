@@ -6,6 +6,7 @@ DOTFILES_DIR="${DOTFILES_SOURCE_DIR:-$HOME/dotfiles}"
 REPO_DIR="${JONKPUB_REPO_DIR:-$HOME/Projects/jonkpub}"
 COMMIT_MSG="${1:-Update dotfiles}"
 
+"$DOTFILES_DIR/bin/update-cli-tool-stack"
 "$DOTFILES_DIR/bin/sync-jonkpub-dotfiles"
 
 if [[ -z "$(git -C "$REPO_DIR" status --porcelain -- dotfiles)" ]]; then

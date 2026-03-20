@@ -5,6 +5,8 @@ set -euo pipefail
 export CLI_TOOL_STACK_GENERATING=1
 
 OUT_FILE="$HOME/CLI_TOOL_STACK.md"
+DOCS_DIR="$HOME/dotfiles/docs"
+DOCS_OUT_FILE="$DOCS_DIR/CLI_TOOL_STACK.md"
 TMP_FILE="${OUT_FILE}.tmp"
 
 if ! command -v zsh >/dev/null 2>&1; then
@@ -14,15 +16,22 @@ fi
 tool_version() {
   local cmd="$1"
   (
-    "$cmd" --version 2>/dev/null |
-      /usr/bin/head -n 1
+    "$cmd" --version 2>/dev/null | /usr/bin/head -n 1
   ) || (
-    "$cmd" -V 2>/dev/null |
-      /usr/bin/head -n 1
+    "$cmd" -V 2>/dev/null | /usr/bin/head -n 1
   ) || (
-    "$cmd" version 2>/dev/null |
-      /usr/bin/head -n 1
+    "$cmd" version 2>/dev/null | /usr/bin/head -n 1
   ) || echo "installed"
+}
+
+resolve_cmd_path() {
+  local cmd="$1"
+  local bin_path=""
+
+  bin_path=$(whence -p "$cmd" 2>/dev/null || true)
+  [[ -n "$bin_path" ]] || return 0
+  [[ -x "$bin_path" ]] || return 0
+  printf '%s\n' "$bin_path"
 }
 
 tool_source() {
@@ -42,20 +51,90 @@ display_path() {
   printf '%s\n' "${path/#$HOME/~}"
 }
 
+machine_memory_gb() {
+  local bytes memory
+  bytes=$(/usr/sbin/sysctl -n hw.memsize 2>/dev/null || echo "")
+  if [[ -n "$bytes" ]]; then
+    /usr/bin/awk -v bytes="$bytes" 'BEGIN { printf "%.0f GB", bytes/1024/1024/1024 }'
+    return 0
+  fi
+
+  memory=$(/usr/sbin/system_profiler SPHardwareDataType 2>/dev/null | /usr/bin/awk -F': ' '/Memory:/{print $2; exit}')
+  printf '%s\n' "${memory:-unknown}"
+}
+
+machine_chip() {
+  local arch
+  arch=$(/usr/bin/uname -m)
+  case "$arch" in
+    arm64) echo "Apple Silicon ($arch)" ;;
+    *) echo "$arch" ;;
+  esac
+}
+
+package_managers() {
+  local -a managers=()
+  command -v brew >/dev/null 2>&1 && managers+=(brew)
+  command -v cargo >/dev/null 2>&1 && managers+=(cargo)
+  command -v bun >/dev/null 2>&1 && managers+=(bun)
+  command -v pnpm >/dev/null 2>&1 && managers+=(pnpm)
+  command -v npm >/dev/null 2>&1 && managers+=(npm)
+  command -v uv >/dev/null 2>&1 && managers+=(uv)
+  command -v pipx >/dev/null 2>&1 && managers+=(pipx)
+  printf '%s\n' "${(j:, :)managers}"
+}
+
+emit_machine_context() {
+  local macos_version macos_build shell_name memory chip managers
+  macos_version=$(/usr/bin/sw_vers -productVersion 2>/dev/null || echo "unknown")
+  macos_build=$(/usr/bin/sw_vers -buildVersion 2>/dev/null || echo "unknown")
+  shell_name="${SHELL:t}"
+  memory=$(machine_memory_gb)
+  chip=$(machine_chip)
+  managers=$(package_managers)
+
+  /bin/cat <<EOF
+## Machine Context
+
+- macOS: \`${macos_version}\` (build \`${macos_build}\`)
+- Chip / architecture: \`${chip}\`
+- Memory: \`${memory:-unknown}\`
+- Default shell: \`${shell_name}\`
+- Dotfiles source of truth: \`~/dotfiles\`
+- Package managers detected: ${managers:-none}
+
+EOF
+}
+
 emit_tool_row() {
   local cmd="$1"
-  local purpose="$2"
+  local description="$2"
+  local why_here="$3"
   local bin_path="" version="" source=""
 
-  bin_path=$(command -v "$cmd" 2>/dev/null || true)
+  bin_path=$(resolve_cmd_path "$cmd")
   [[ -n "$bin_path" ]] || return 0
 
   version=$(tool_version "$cmd")
   source=$(tool_source "$bin_path")
   bin_path=$(display_path "$bin_path")
 
-  printf '| `%s` | %s | `%s` | %s | %s |\n' \
-    "$cmd" "$version" "$bin_path" "$purpose" "$source"
+  printf '| `%s` | %s | %s | %s | `%s` | %s |\n' \
+    "$cmd" "$description" "$why_here" "$version" "$bin_path" "$source"
+}
+
+emit_tool_section_header() {
+  local title="$1"
+  local intro="$2"
+
+  /bin/cat <<EOF
+## ${title}
+
+${intro}
+
+| Tool | What It Is | Why It Exists Here | Version | Path | Source |
+| --- | --- | --- | --- | --- | --- |
+EOF
 }
 
 emit_alias_rows() {
@@ -73,25 +152,27 @@ emit_alias_rows() {
 
 emit_function_rows() {
   /bin/cat <<'EOF'
-| Function | Purpose |
+| Function | What It Does |
 | --- | --- |
-| `ta` | attach to tmux session `main` or create it |
-| `tn` | create a new tmux session |
-| `mux` | wrapper around `ta` |
-| `blr` | rerun the latest saved terminal-block command |
-| `terminal_hints_widget` | zle widget bound to `Ctrl-G` and `Esc-g` |
-| `switch_theme` | interactive Ghostty theme switcher |
+| `ta` | Attaches to your main tmux session or creates it if it does not exist. |
+| `tn` | Creates a new tmux session, defaulting to `scratch`. |
+| `mux` | Short wrapper around `ta`. |
+| `blr` | Pulls the latest saved terminal-block command back into the prompt. |
+| `terminal_hints_widget` | Opens your terminal hints helper from a keybinding. |
+| `switch_theme` | Opens your Ghostty theme switcher workflow. |
 EOF
 }
 
-emit_local_scripts() {
-  local dir="$HOME/.local/bin"
-  [[ -d "$dir" ]] || return 0
-  /usr/bin/find "$dir" -maxdepth 1 -type f -perm -111 -print 2>/dev/null |
-    LC_ALL=C /usr/bin/sort |
-    while IFS= read -r path; do
-      printf -- '- `%s`\n' "${path#$dir/}"
-    done
+emit_local_script_row() {
+  local cmd="$1"
+  local description="$2"
+  local bin_path=""
+
+  bin_path=$(resolve_cmd_path "$cmd")
+  [[ -n "$bin_path" ]] || return 0
+  bin_path=$(display_path "$bin_path")
+
+  printf '| `%s` | %s | `%s` |\n' "$cmd" "$description" "$bin_path"
 }
 
 {
@@ -99,43 +180,84 @@ emit_local_scripts() {
 # CLI Tool Stack
 
 This file is autogenerated by `~/dotfiles/bin/update-cli-tool-stack`.
-Do not edit it manually.
+Do not edit it manually. Edit `~/dotfiles` instead.
 
-## Core Shell Integrations
-
-These are loaded directly into `zsh`:
-
-- `zoxide` via `eval "$(zoxide init zsh)"`
-- `atuin` via `eval "$(atuin init zsh)"`
-- `starship` via `eval "$(starship init zsh)"`
-- `nvm` via `. "$NVM_DIR/nvm.sh"`
-- `bun` completions via `. "$HOME/.bun/_bun"`
-- `fzf-tab` via `source "/opt/homebrew/opt/fzf-tab/share/fzf-tab/fzf-tab.zsh"`
-
-## Installed CLI Tools
-
-| Tool | Version | Path | Primary Use | Source |
-| --- | --- | --- | --- | --- |
 EOF
 
-  emit_tool_row tmux "terminal multiplexing / sessions"
-  emit_tool_row eza "modern ls replacement"
-  emit_tool_row fd "fast file search"
-  emit_tool_row btm "system monitor"
-  emit_tool_row broot "interactive tree/navigation"
-  emit_tool_row yazi "terminal file manager"
-  emit_tool_row gitui "terminal Git UI"
-  emit_tool_row sk "fuzzy finder / skim"
-  emit_tool_row zoxide "smarter directory jumping"
-  emit_tool_row atuin "shell history/search/sync"
-  emit_tool_row starship "shell prompt"
-  emit_tool_row bat "modern cat with formatting"
-  emit_tool_row fzf "fuzzy finder"
-  emit_tool_row bun "JS runtime / package manager"
-  emit_tool_row node "JavaScript runtime"
-  emit_tool_row pnpm "package manager"
-  emit_tool_row ghostty "terminal emulator CLI hooks"
-  emit_tool_row zed "editor CLI launcher"
+  emit_machine_context
+
+  /bin/cat <<'EOF'
+## How To Use This File
+
+- Read the “Core Tools To Learn First” section first if you want the shortest path to improving your shell workflow.
+- The “Supporting Tools” and “Runtime / Platform Tools” sections are still part of the system, but are less important to learn immediately.
+- `~/dotfiles` is the source of truth for configuration.
+- `~/CLI_TOOL_STACK.md` is the convenient home-level copy.
+- `~/dotfiles/docs/CLI_TOOL_STACK.md` is the repo-backed copy you can hand to agents or keep under version control.
+
+EOF
+
+  emit_tool_section_header "Core Tools To Learn First" "These are the tools that most directly shape your day-to-day terminal workflow."
+  emit_tool_row tmux "Lets you keep multiple terminal sessions, panes, and windows alive inside one terminal." "This is the backbone of your persistent terminal workflow and session management."
+  emit_tool_row zoxide "Learns the directories you use often so you can jump to them with short commands." "It reduces navigation friction across projects."
+  emit_tool_row atuin "Replaces plain shell history with searchable, smarter command recall." "It makes your command history useful as a memory system instead of a raw log."
+  emit_tool_row eza "A nicer ls with colors, icons, tree view, and git-aware listing." "You use it as the default replacement for plain directory listing."
+  emit_tool_row fd "A fast, user-friendly alternative to find for locating files and folders." "It is the quick file locator in your shell workflow."
+  emit_tool_row bat "A better cat with syntax highlighting, paging, and cleaner file previews." "It improves file inspection and previewing."
+  emit_tool_row fzf "A fuzzy finder for interactively narrowing down long lists of files, commands, or results." "It powers fast interactive selection across many workflows."
+  emit_tool_row yazi "A full-screen terminal file manager for browsing and opening files quickly." "It gives you a faster visual file workflow when fd and eza are not enough."
+  emit_tool_row starship "Builds the prompt shown in your shell with git/status/time info." "It makes shell state and repo context visible at a glance."
+  emit_tool_row fzf-tab "Upgrades tab completion into an interactive fuzzy-select menu." "It makes completion feel like a searchable picker instead of a blind cycle."
+  emit_tool_row gitui "A terminal UI for common Git actions without typing every command manually." "It is your faster visual fallback for Git work."
+
+  /bin/cat <<'EOF'
+
+EOF
+
+  emit_tool_section_header "Supporting Tools" "Useful tools that complement the core shell workflow or cover narrower tasks."
+  emit_tool_row broot "An interactive tree browser for exploring directories and files in the terminal." "It gives you an alternate file-exploration workflow when you want structure-first navigation."
+  emit_tool_row btm "A terminal dashboard for CPU, memory, disk, and process monitoring." "It is your quick system-health view."
+  emit_tool_row sk "Another fuzzy finder, similar to fzf, for quickly selecting items from a list." "It gives you a secondary fuzzy-selection tool to compare or use selectively."
+  emit_tool_row ghostty "Terminal emulator with command-line hooks and theme/listing support." "It is part of your terminal environment and theme tooling."
+  emit_tool_row zed "Editor launcher so you can open files and projects from the terminal." "It connects your shell workflow to your editor quickly."
+
+  /bin/cat <<'EOF'
+
+EOF
+
+  emit_tool_section_header "Runtime / Platform Tools" "Installed runtimes and package managers that support the rest of the toolchain."
+  emit_tool_row node "The main JavaScript runtime used to run JS tooling and apps outside the browser." "A large part of your tooling stack depends on it."
+  emit_tool_row bun "A fast JavaScript runtime and package/tool runner with built-in bundling features." "You use it for fast JS tooling and some local workflows."
+  emit_tool_row pnpm "A package manager for JavaScript projects that is fast and space-efficient." "It is one of your default JS package managers."
+  emit_tool_row nvm "Lets you install and switch between different Node.js versions." "It keeps Node version management flexible across projects."
+
+  /bin/cat <<'EOF'
+
+## Local Workflow Helpers
+
+These are your custom scripts in `~/.local/bin`. They are specific to your setup and worth learning only after the core tools above.
+
+| Helper | What It Does | Path |
+| --- | --- | --- |
+EOF
+
+  emit_local_script_row terminal-guide "Your local helper for browsing and remembering terminal workflow commands."
+  emit_local_script_row terminal-hints "Your local helper for showing usage hints and shortcut reminders."
+  emit_local_script_row terminal-hello "Your local helper for showing your custom terminal intro or banner."
+  emit_local_script_row terminal-blocks-browser "Browses your saved terminal block history."
+  emit_local_script_row terminal-block-copy-latest-command "Copies the most recent saved command block."
+  emit_local_script_row terminal-block-copy-latest-output "Copies the most recent saved command output block."
+  emit_local_script_row terminal-block-bookmark-latest "Bookmarks the latest terminal block for later reference."
+  emit_local_script_row terminal-block-rerun-latest "Pulls the latest saved command back into the prompt to rerun it."
+  emit_local_script_row tmux-sessionizer "Quickly selects or creates tmux sessions."
+  emit_local_script_row command-palette-preview "Previews command-palette style actions."
+  emit_local_script_row ghostty-reload "Reloads Ghostty configuration."
+  emit_local_script_row ghostty-theme-preview "Previews Ghostty themes before applying them."
+  emit_local_script_row ghostty-theme-revert "Reverts a Ghostty theme change."
+  emit_local_script_row ghostty-theme-save "Saves a Ghostty theme choice."
+  emit_local_script_row sync-jonkpub-dotfiles "Mirrors ~/dotfiles into the jonkpub/jonkpub repo subtree."
+  emit_local_script_row update-dotfile "Refreshes docs, syncs dotfiles into the profile repo, then commits and pushes."
+  emit_local_script_row update-cli-tool-stack "Regenerates this CLI inventory."
 
   /bin/cat <<'EOF'
 
@@ -157,31 +279,22 @@ EOF
 
   /bin/cat <<'EOF'
 
-## Local Custom Scripts
+## Dotfiles Workflow
 
-These live in `~/.local/bin`:
-
-EOF
-
-  emit_local_scripts
-
-  /bin/cat <<'EOF'
+- Edit files in `~/dotfiles`, not in the home-directory stubs.
+- Regenerate the inventory with `~/dotfiles/bin/update-cli-tool-stack`.
+- Publish the mirrored subtree with `udf` or `~/dotfiles/bin/update-dotfile`.
+- Keep secrets and auth material out of the repo-backed config.
 
 ## Notes On Overlap
 
-- `fd`, `broot`, and `yazi` all help with file/directory discovery.
+- `fd`, `broot`, and `yazi` all help with file and directory discovery.
 - `fzf` and `sk` are both fuzzy finders.
-- `tmux` and Ghostty overlap a bit on workflow ergonomics, but not on core capability.
-- `bat` and `eza` are both output enhancers rather than essential tools.
-- `node`, `bun`, and `pnpm` overlap in JavaScript workflow territory, though they serve different layers.
-
-## Sensible Pruning Candidates
-
-1. Keep one fuzzy finder: `fzf` or `sk`.
-2. Keep one primary file navigator: `yazi` or `broot`.
-3. Decide whether you really use the custom `terminal-*` helpers, since they are the most bespoke part of the stack.
-4. Keep `nvm` only if you actually switch Node versions; otherwise Homebrew `node` may be enough.
+- `bat` and `eza` are both output enhancers.
+- `node`, `bun`, and `pnpm` all sit in your JavaScript workflow, but at different layers.
 EOF
 } >"$TMP_FILE"
 
+/bin/mkdir -p "$DOCS_DIR"
+/bin/cp "$TMP_FILE" "$DOCS_OUT_FILE"
 /bin/mv "$TMP_FILE" "$OUT_FILE"

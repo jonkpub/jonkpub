@@ -16,8 +16,11 @@ Personal environment setup for this machine.
 - `config/starship.toml`
 - `config/gh/config.yml`
 - `config/codex-orchestrator/config.json`
+- `docs/CLI_TOOL_STACK.md`
+- `AGENT_CONTEXT.md`
 - `Brewfile`
 - `bin/sync-jonkpub-dotfiles`
+- `bin/update-dotfile`
 - `bin/update-cli-tool-stack`
 
 ## Usage
@@ -38,6 +41,12 @@ Refresh the CLI inventory manually:
 
 ```sh
 ~/dotfiles/bin/update-cli-tool-stack
+```
+
+The generated inventory is also copied into the repo at:
+
+```sh
+~/dotfiles/docs/CLI_TOOL_STACK.md
 ```
 
 Mirror the current working copy into the `jonkpub/jonkpub` profile repo subtree:
@@ -65,4 +74,5 @@ Sync, commit, and push the mirrored subtree in one step:
 - Selected files in `~/.config` are symlinked back to this repo by `install.sh`.
 - `fzf-tab` is installed through Homebrew rather than vendored in this repo.
 - Secret-bearing or machine-local files are intentionally excluded, for example `~/.config/gh/hosts.yml`.
-- `CLI_TOOL_STACK.md` is a generated report, not the source of truth.
+- `CLI_TOOL_STACK.md` is a generated reference, not the source of truth.
+- `AGENT_CONTEXT.md` is curated guidance for workflow, preferences, and publishing rules.

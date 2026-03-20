@@ -52,6 +52,12 @@ You can override the target clone location if needed:
 JONKPUB_REPO_DIR=~/some/other/jonkpub ~/dotfiles/bin/sync-jonkpub-dotfiles
 ```
 
+Sync, commit, and push the mirrored subtree in one step:
+
+```sh
+~/dotfiles/bin/update-dotfile
+```
+
 ## Notes
 
 - The repo-backed files are the canonical source of truth.

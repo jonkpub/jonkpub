@@ -1,0 +1,26 @@
+#!/bin/zsh
+
+set -euo pipefail
+
+DOTFILES_DIR="${DOTFILES_SOURCE_DIR:-$HOME/dotfiles}"
+REPO_DIR="${JONKPUB_REPO_DIR:-$HOME/Projects/jonkpub}"
+COMMIT_MSG="${1:-Update dotfiles}"
+
+"$DOTFILES_DIR/bin/sync-jonkpub-dotfiles"
+
+if [[ -z "$(git -C "$REPO_DIR" status --porcelain -- dotfiles)" ]]; then
+  print "no dotfiles changes to publish"
+  exit 0
+fi
+
+git -C "$REPO_DIR" add dotfiles
+
+if [[ -z "$(git -C "$REPO_DIR" status --porcelain --cached -- dotfiles)" ]]; then
+  print "no staged dotfiles changes to commit"
+  exit 0
+fi
+
+git -C "$REPO_DIR" commit -m "$COMMIT_MSG"
+git -C "$REPO_DIR" push origin main
+
+print "published dotfiles to $REPO_DIR"
